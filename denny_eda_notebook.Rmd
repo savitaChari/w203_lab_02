@@ -6,6 +6,15 @@ output: html_notebook
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+```{r load packages, message = FALSE}
+library(tidyverse)
+library(ggplot2) 
+library(lmtest)
+library(sandwich)
+library(stargazer)
+library(funModeling)
+library(gclus)
+```
 
 ```{r import data}
 # set seed for random number
@@ -23,6 +32,51 @@ eda <- d[sample_rows, ]
 plot(eda)
 ```
 
+```{r eda plots}
+# show basic statistics, there are outliers in view count
+describe(d)
+freq(eda)
+hist(eda$FFMC)
+hist(eda$DMC)
+
+names <- names(eda)
+classes <- sapply(eda, class)
+for(name in names[classes == 'numeric'])
+{
+  dev.new()
+  print(hist(eda[,name]))
+}
+quant_cols = list('FFMC','wind')
+quant_cols[0]
+ggplot(eda, aes(x = FFMC)) +
+  geom_histogram() + stat_bin() +
+  ggtitle(cat("Histogram of ", col))
+
+for (col in quant_cols) {
+  print(eda[1,col])
+  # ggplot(eda, aes(x=col)) + geom_boxplot()
+  # ggplot(data=eda,aes(x=col)) + geom_histogram()
+  # hist(eda[,col])
+  print(
+    ggplot(eda, aes(x = col)) +
+    geom_histogram() + stat_bin(bins=10) + 
+    ggtitle(cat("Histogram of ", col))
+  )
+}
+
+  ggplot(eda, aes(x = col)) +
+  geom_histogram() + stat_bin(bins=10) + 
+  ggtitle(cat("Histogram of ", col))
+
+boxplot(eda$wind, 
+        main = "Wind values during forest fires", 
+        ylab = "Wind Speed")
+
+ggplot(data=eda, aes(x=month, y=area)) + geom_boxplot()
+
+# https://stackoverflow.com/questions/20251119/increase-the-size-of-variable-size-points-in-ggplot2-scatter-plot
+ggplot(data=eda, aes(x=X, y=Y)) + geom_point(aes(size=area)) + ggtitle('Location of the fire and area burned')
+```
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
 
 When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
