@@ -7,8 +7,20 @@ This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute
 
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
 
-```{r}
-plot(cars)
+```{r import data}
+# set seed for random number
+set.seed(1234)
+
+# load dataframe
+d <- read.csv("data/forestfires.csv")
+
+# sample 30% of the data
+sample_rows = sample(nrow(d),as.integer(nrow(d)*.3))
+
+# make dataframe for eda with sampled rows
+eda <- d[sample_rows, ]
+
+plot(eda)
 ```
 
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
