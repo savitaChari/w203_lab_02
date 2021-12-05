@@ -1,0 +1,270 @@
+---
+title: "Lab 2"
+author: "w203 Savita chari"
+subtitle: 'w203: Statistics for Data Science Project II'
+output:
+  pdf_document: default
+  html_document: default
+editor_options: 
+  chunk_output_type: inline
+---
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggplot2) 
+library(lmtest)
+library(sandwich)
+library(stargazer)
+library(funModeling) 
+library(corrplot)
+library(car)
+library(perturbR)
+library(ggplot2)
+library(MASS)
+library(cowplot)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r read the dataSet from datafile, echo = TRUE, message=FALSE, warning=FALSE}
+setwd("C:/Users/savit/W203_lab_2")
+fire_data <- read.csv("forestfires.csv")
+glimpse(fire_data)
+```
+
+```{r EDA all the  DataSet}
+print(nrow(subset(fire_data,area == 0)))
+describe(fire_data)
+```
+
+```{r Categorize Months according to season in Portugal}
+fire_data =within(fire_data,{
+    season=NA
+    season[month %in% c("dec","jan","feb")]='1winter'
+    season[month %in% c("oct","nov")]='4autumn'
+    season[month %in%  c("jun","jul","aug", "sep")]='3summer'
+    season[month %in%  c("mar","apr","may")]='2spring'
+})
+view(fire_data)
+
+```
+
+
+>Transform area as log of area
+ Around 50% of observations have 0 value. This skews the data. The amount of data is to large to drop so we will perform a transformation on the data by adding 1.1 and then perform log transformation on it
+
+```{r Perform log transformation on area field. Pick only the observations with some data in the area column}
+fire_data$logarea <- log(fire_data$area + 1.1)
+view(fire_data)
+```
+
+
+
+
+
+```{r EDS continued, echo = FALSE, message=FALSE, warning=FALSE, show_col_types = FALSE}
+print(status(fire_data))
+```
+
+
+```{r EDS-Categorywise data distribution, echo = FALSE, message=FALSE, warning=FALSE, show_col_types = FALSE }
+freq(fire_data)
+```
+
+
+
+```{r EDS-plot distribution, echo = FALSE, message=FALSE, warning=FALSE, show_col_types = FALSE }
+plot_num(fire_data)
+
+```
+
+
+```{r}
+hist(fire_data$temp)
+```
+```{r}
+hist(fire_data$wind)
+```
+```{r}
+hist(log(fire_data$rain ))
+```
+
+
+
+```{r Box plots, echo = TRUE, message=FALSE, warning=FALSE, show_col_types = FALSE, results = TRUE}
+# Common function for Box plot so that it can be used with multiple parameters (aka columns)
+bx_plt_func <- function (x, y){
+                ggplot(data = fire_data) +
+                aes_string(x = x, y =y) +
+                geom_boxplot() + 
+                theme(panel.background = element_rect(fill = "grey"))
+}
+x_var_month <- names(fire_data[3]) ## 3rd column is month
+x_var_day <- names(fire_data[4]) ## 4th column is day
+y_var <- names(fire_data[5:12]) ## Column 5 onwards are being used for analysis
+z_var <- "Monthwise Data Analysis"
+# Box plots by month for all variables earmarked for analysis
+month_box <- map2(x_var_month, y_var, bx_plt_func)
+
+print(month_box)
+
+```
+
+
+```{r Divide the data into training and validation sections , echo = TRUE, message=FALSE, warning=FALSE, show_col_types = FALSE}
+sample_size = floor(0.7*nrow(fire_data))
+set.seed(777)
+# randomly split data in r
+picked = sample(seq_len(nrow(fire_data)),size = sample_size)
+development =fire_data[picked,]
+holdout =fire_data[-picked,]
+view(holdout)
+view(development)
+```
+
+
+
+
+
+```{r Observe the Distribution of Burnt Area }
+hist_of_area_dist <- fire_data %>% 
+ggplot() + aes(x = area) +
+geom_histogram( bins=50, fill="blue", color="black", alpha=0.9) +
+labs(
+x = "Area in hectare ", y="Occurance",
+title = 'Distribution of Burnt area'
+) 
+
+# Distribution of Burnt Area 
+ hist_of_logarea_dist <- (fire_data %>% 
+ggplot() + aes(x = logarea) +
+geom_histogram( aes(y = ..density..), fill="blue", color="black")
++ labs(
+x = "Area in hectare ", y="Occurance",
+title = 'Distr of Log Transformed Burnt-area'
+) )
+
+#  holdout - Area distribution for Training Data
+ 
+holdout_hist_of_area_dist <- holdout %>% 
+ggplot() + aes(x = area) +
+geom_histogram( bins=50, fill="pink", color="black", alpha=0.9) +
+labs(
+x = "Burnt Area in hectare ", y="Occurance",
+title = 'Training Data Distr of area'
+) 
+
+ holdout_hist_of_logarea_dist <- (holdout %>% 
+ggplot() + aes(x = logarea) +
+geom_histogram( aes(y = ..density..), fill="pink", color="black") +  labs(
+x = "Burnt Area in hectare ", y="Occurance",
+title = 'Training Data Distr of Log(area)'
+) )
+
+
+# development - Area distribution for Training Data
+ 
+development_hist_of_area_dist <- development %>% 
+ggplot() + aes(x = area) +
+geom_histogram( bins=50, fill="orange", color="black", alpha=0.9) +
+labs(
+x = "Burnt Area in hectare ", y="Occurance",
+title = 'Validation Data Distr of area'
+) 
+
+ development_hist_of_logarea_dist <- (development %>% 
+ggplot() + aes(x = logarea) +
+geom_histogram( aes(y = ..density..), fill="orange", color="black") +  labs(
+x = "Burnt Area in hectare ", y="Occurance",
+title = 'Validation Data Distr of Log(area)'
+) )
+
+ 
+
+```
+
+```{r}
+plot_grid(hist_of_area_dist, NULL, holdout_hist_of_area_dist,development_hist_of_area_dist )
+```
+
+```{r}
+plot_grid(hist_of_logarea_dist, NULL, holdout_hist_of_logarea_dist, development_hist_of_logarea_dist)
+```
+
+
+```{r , echo = FALSE, message=FALSE, warning=FALSE}
+scatterplotMatrix(~ area + log(wind) + log(rain+0.001) + temp, data = fire_data,
+                  diagonal = FALSE,             # Remove kernel density estimates
+                  regLine = list(col = "green", # Linear regression line color
+                                 lwd = 3),      # Linear regression line width
+                  smooth = list(col.smooth = "red",   # Non-parametric mean color
+                                col.spread = "blue")) # Non-parametric variance color
+
+```
+
+
+#------------------------ Coeftest -------------------------------------------
+```{r}
+model_h_long <- lm(formula = area ~ log(rain+ 0.001) + temp + (wind) , data=holdout)
+coeftest(model_h_long, vcov=vcovHAC)
+set.seed(5600)
+shapiro.test(sample(model_h_long$residuals, size = 5000,replace=TRUE))
+```
+
+```{r}
+model_d_long <- lm(formula = area ~ log(rain+0.001) + temp + log(wind) , data=development)
+coeftest(model_d_long, vcov=vcovHAC)
+set.seed(5600)
+shapiro.test(sample(model_d_long$residuals, size = 5000,replace=TRUE))
+```
+
+```{r}
+model_long <- lm(formula = area ~ log(rain+0.01) + temp + log(wind) , data=fire_data)
+coeftest(model_long, vcov=vcovHAC)
+
+```
+
+```{r}
+set.seed(5600)
+shapiro.test(sample(model_long$residuals, size = 5000,replace=TRUE))
+
+```
+
+
+```{r}
+plot(model_long)
+residualPlots(model_long)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
