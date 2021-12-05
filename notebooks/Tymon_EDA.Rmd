@@ -16,6 +16,10 @@ library(ggplot2)
 library(lmtest)
 library(sandwich)
 library(stargazer)
+library(magrittr)
+library(sandwich)
+library(gridExtra)
+
 ```
 
 # Introduction 
@@ -26,7 +30,236 @@ In the Pacific Northwest, drought and an increase in human water consumption hav
 
 # Research Question
 
-How might we predict the size of a forest fire based on wind, temperature, humidity, and other variables.
+How might we predict the size of a forest fire based on wind, rain, flammability of forest litter, flammability of deeper/larger ground forest objects, and the type fuel available to burn on the forest floor.
+
+
+# Data
+
+```{r load data} 
+fire_data <- read_csv(file = '../src/data/forestfires.csv')
+```
+
+```{r}
+sample_size = floor(0.7*nrow(fire_data))
+set.seed(777)
+
+# randomly split data in r
+picked = sample(seq_len(nrow(fire_data)),size = sample_size)
+fire = fire_data[picked,]
+training = fire_data[-picked,]
+```
+
+```{r}
+
+fire
+training
+
+fire <- fire %>%
+  mutate(
+    rain_binary = case_when(
+      rain > 0 ~ 1,
+      rain == 0 ~ 0,
+      )
+  )
+
+training <- training %>%
+  mutate(
+    rain_binary = case_when(
+      rain > 0 ~ 1,
+      rain == 0 ~ 0,
+      )
+  )
+
+
+```
+
+```{r EDA} 
+# str(training)
+# summary(training$wind)
+# summary(training$rain)
+# summary(training$FFMC)
+# summary(training$DMC)
+# summary(training$area)
+
+# unique(training$wind)
+# unique(training$rain)
+# unique(training$FFMC)
+# unique(training$DMC)
+# unique(training$area)
+
+# subset(training, wind > 9)
+# subset(training, area > 500)
+# subset(training, area < 20)
+# subset(training, area < 5)
+
+hist(training$wind)
+hist(fire_data$rain)
+hist(training$FFMC)
+hist(training$DMC)
+hist(training$area)
+
+```
+
+```{r removing outliers}
+wind_IQR <- IQR(training$wind)
+rain_IQR <- IQR(training$rain)
+FFMC_IQR <- IQR(training$FFMC)
+DMC_IQR <- IQR(training$DMC)
+area_IQR <- IQR(training$area)
+
+wind_outlier_upper <- 5.4 + (1.5*wind_IQR)
+wind_outlier_lower <- 2.7 - (1.5*wind_IQR)
+
+rain_outlier_upper <- 0 + (1.5*rain_IQR)
+rain_outlier_lower <- 0 - (1.5*rain_IQR)
+
+FFMC_outlier_upper <- 93.03 + (1.5*FFMC_IQR)
+FFMC_outlier_lower <- 90.2 - (1.5*FFMC_IQR)
+
+DMC_outlier_upper <- 141.57 + (1.5*DMC_IQR)
+DMC_outlier_lower <- 49.95 - (1.5*DMC_IQR)
+
+area_outlier_upper <- 8.613 + (1.5*area_IQR)
+area_outlier_lower <- 0 - (1.5*area_IQR)
+
+training <- subset(training, wind <= wind_outlier_upper & wind >= wind_outlier_lower)
+training <- subset(training, rain <= rain_outlier_upper & rain >= rain_outlier_lower)
+training <- subset(training, FFMC <= FFMC_outlier_upper & FFMC >= FFMC_outlier_lower)
+training <- subset(training, DMC <= DMC_outlier_upper & DMC >= DMC_outlier_lower)
+training <- subset(training, area <= area_outlier_upper & area >= area_outlier_lower)
+# training
+
+hist(training$wind)
+hist(fire_data$rain)
+hist(training$FFMC)
+hist(training$DMC)
+hist(training$area)
+
+```
+
+```{r plotting predictors vs outcome variable} 
+
+a <- ggplot(training, aes(x = wind, y = area)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("wind vs area")
+
+b <- ggplot(training, aes(x = rain_binary, y = area)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("rain vs area")
+
+c <- ggplot(training, aes(x = FFMC, y = area)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("FFMC vs area")
+
+d <- ggplot(training, aes(x = DMC, area)) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("DMC vs area")
+
+grid.arrange(a, b, c, d, nrow = 2)
+```
+
+```{r plotting predictors vs log transformed outcome variable}
+
+
+a <- ggplot(training, aes(x = wind, y = log(area+1))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("wind vs log(area+1)")
+
+b <- ggplot(training, aes(x = rain_binary, y = log(area+1))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("rain vs log(area+1)")
+
+c <- ggplot(training, aes(x = FFMC, y = log(area+1))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("FFMC vs log(area+1)")
+
+d <- ggplot(training, aes(x = DMC, y = log(area+1))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("DMC vs log(area+1)")
+
+grid.arrange(a, b, c, d, nrow = 2)
+```
+
+```{r plotting predictors vs sqrt transformed outcome variable }
+a <- ggplot(training, aes(x = wind, y = sqrt(area))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("wind vs sqrt(area)")
+
+b <- ggplot(training, aes(x = rain, y = sqrt(area))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("rain vs sqrt(area)")
+
+c <- ggplot(training, aes(x = FFMC, y = sqrt(area))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("FFMC vs sqrt(area)")
+
+d <- ggplot(training, aes(x = DMC, y = sqrt(area))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("DMC vs sqrt(area)")
+
+grid.arrange(a, b, c, d, nrow = 2)
+
+```
+
+```{r plotting predictors vs cubic root transformed outcome variable }
+a <- ggplot(training, aes(x = wind, y = (area)^(1/3))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("wind vs (area)^(1/3)")
+
+b <- ggplot(training, aes(x = rain, y = (area)^(1/3))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("rain vs (area)^(1/3)")
+
+c <- ggplot(training, aes(x = FFMC, y = (area)^(1/3))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("FFMC vs (area)^(1/3)")
+
+d <- ggplot(training, aes(x = DMC, y = (area)^(1/3))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("DMC vs (area)^(1/3)")
+
+grid.arrange(a, b, c, d, nrow = 2)
+```
+```{r plotting trasonform predictors with outcome variable }
+a <- ggplot(training, aes(x = wind, y = log(area+1))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("wind vs log(area+1)")
+
+b <- ggplot(training, aes(x = log(rain+1), y = log(area+1))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("log(rain+1) vs log(area+1)")
+
+c <- ggplot(training, aes(x = log(FFMC), y = log(area+1))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("log(FFMC) vs log(area+1)")
+
+d <- ggplot(training, aes(x = log(DMC), y = log(area+1))) +
+  geom_point() +
+  geom_smooth() +
+  ggtitle("log(DMC) vs log(area+1)")
+
+grid.arrange(a, b, c, d, nrow = 2)
+
+```
 
 
 # Research Design
@@ -48,69 +281,19 @@ Additional models should each be defensible, and should continue to tell the sto
 
 Your goal is to choose models that encircle the space of reasonable modeling choices, and to give an overall understanding of how these choices impact results.
 
-# Data
 
-```{r load data} 
-fire_data <- read_csv(file = '../src/data/forestfires.csv')
-```
-```{r EDA} 
-str(fire_data)
+```{r model building}
 
-# unique(fire_data$month)
-# unique(fire_data$temp)
-# unique(fire_data$wind)
-# unique(fire_data$rain)
-# unique(fire_data$area)
+model1 <- lm(log(area+1) ~ wind + rain_binary + FFMC + DMC, data = fire)
 
-# subset(fire_data, area > 1000)
-# subset(fire_data, area > 500)
-# subset(fire_data, area < 20)
-# subset(fire_data, area < 5)
+# model2 <- lm(log(area+1) ~ wind + rain_binary + temp + RH + FFMC + DMC + DC + ISI, data = training)
 
-# ggplot(fire_data, aes(x=reorder(month, month, function(x)-length(x)))) +
-#   geom_bar(fill='red') +
-#   labs(x='Team')
-# hist(fire_data$temp)
-# hist(fire_data$wind)
-# hist(fire_data$rain)
-# hist(fire_data$area)
-
-```
-
-```{r Data Transformations} 
-
-# ggplot(d, aes(x = average_rating, y = views)) +
-#   geom_point() +
-#   geom_smooth() +
-#   ggtitle("average rating vs views")
-# 
-# ggplot(d, aes(x = average_rating, y = log(views) )) +
-#   geom_point() +
-#   geom_smooth() +
-#   ggtitle("average rating vs log(views)")
-# 
-# ggplot(d, aes(x = log_of_average_rating, y = log(views) )) +
-#   geom_point() +
-#   geom_smooth() +
-#   ggtitle("average rating vs log(views)")
-
-```
+# model3 <- lm(log(area+1) ~ wind + rain_binary + FFMC + DMC, data = training)
 
 
-```{r}
-sample_size = floor(0.7*nrow(fire_data))
-set.seed(777)
-
-# randomly split data in r
-picked = sample(seq_len(nrow(fire_data)),size = sample_size)
-development =fire_data[picked,]
-holdout =fire_data[-picked,]
-```
-
-```{r}
-
-development
-holdout
+# model2 <- lm(log(area+1) ~ log(ISI) , data = training)
+# summary(model1)
+coeftest(model1, vcov = vcovHC)
 
 ```
 # 4. Results
